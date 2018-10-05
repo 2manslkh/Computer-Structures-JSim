@@ -1,0 +1,10 @@
+
+* 1 BIT ADDER TEST
+.include "/8clocks.jsim"
+Xtest2 clk1 clk2 clk3 sum carry FA
+.tran 200ns
+.plot clk1
+.plot clk2
+.plot clk3
+.plot sum
+.plot carry

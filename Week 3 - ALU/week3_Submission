@@ -1,0 +1,318 @@
+.include "stdcell.jsim"
+.include "lab3checkoff_10.jsim"
+****************************************************************
+* Pre-requisites
+****************************************************************
+
+* 1 Bit Full Adder -- WORKING
+.subckt FA a b cin s cout
+Xxor1 a b xor1_o xor2
+Xxor2 xor1_o cin s xor2
+Xand1 a b and1_o and2
+Xand2 xor1_o cin and2_o and2
+Xor2 and1_o and2_o cout or2
+.ends
+
+****************************************************************
+* Adder -- WORKING
+****************************************************************
+* Adds 32 Bit A and 32 Bit B inputs
+* Input: A[31:0]  - 32 Bit Input A, A31 is the Signed Bit
+*        B[31:0]  - 32 Bit Input B, B31 is the Signed Bit
+*        ALUFN[0] - Control Signal, 0=Add, 1=Subtract (2s Complement B with XOR Gates)
+
+* Outputs: s[31:0] - 32 Bit Output S, Sum of A and B
+*          z       - True when s outputs are 0
+*          v       - True when operation overflows
+*          n       - True when s31 output = 1 (Negative Output)
+
+.subckt adder32 ALUFN[0] A[31:0] B[31:0] s[31:0] z v n
+
+* B to XB
+Xxor2 B[31:0] ALUFN0#32 XB[31:0] xor2
+
+* 32 Bit Adder
+XFA0     A0 XB0 ALUFN0 s0 c0 FA
+XFA1to29 A[30:1] XB[30:1] c[29:0] s[30:1] c[30:1] FA
+XFA31    A31 XB31 c30 s31 s32 FA
+
+* Z
+Xnor4_z   s[31:24]  s[23:16] s[15:8] s[7:0]   ss[7:0]  nor4
+Xand4_z2  ss[7:6]   ss[5:4]  ss[3:2] ss[1:0]  sss[1:0] and4
+Xand2_z   sss1      sss0                     z         and2
+
+* V
+XABnxor a31  xb31    xnor_o xnor2
+XASxor  a31  s31     xor_o  xor2
+Xand2   xor_o xnor_o v      and2
+
+* N
+Xbuff s31 n buffer
+
+.ends
+
+****************************************************************
+* Comparator -- WORKING
+****************************************************************
+* Performs Boolean Comparisons, A=B, A<B, A<=B
+
+* Input:   ALUFN[2:1]  - Comparison Selector, (0 1) A=B, (1 0) A<B, (1 1) A<=B
+*          z           - True when s outputs are 0
+*          v           - True when operation overflows
+*          n           - True when s31 output = 1 (Negative Output)
+
+* Outputs: cmp[31:0] - 32 Bit Output
+*          cmp0 - Least Significant Bit: Determines whether the selected boolean comparison is true
+
+.subckt compare32 ALUFN[2:1] z v n cmp[31:0]
+
+* A = B
+Xequ z equ buffer
+
+* A < B
+Xless n v less xor2
+
+* A <= B
+Xeless less equ eless or2
+
+* 4_way Selector
+Xselector4 ALUFN1 ALUFN2 0 equ less eless cmp0 mux4
+
+* 31 Bit High constant
+Xcon cmp[31:1] constant0
+
+.ends
+
+****************************************************************
+* Beta Logic - WORKING
+****************************************************************
+* Beta Logic Allows all 16 2 input boolean functions by Implementing OR, AND, XOR
+* The ALUFN Inputs encode the Truth Table of the specific options
+
+.subckt boole32 ALUFN[3:0] A[31:0] B[31:0] boole[31:0]
+
+Xmux32 A[31:0] B[31:0] ALUFN0#32 ALUFN1#32 ALUFN2#32 ALUFN3#32 boole[31:0] mux4
+
+.ends
+
+****************************************************************
+* 32 Bit Shifter - WORKING
+****************************************************************
+* Shifter shifts the input A to Left or Right by a magnitude specified by B
+
+*Input: ALUFN[1:0]   - Selects Left or Right Shift (0 0): Shift Left, (0 1): Shift Right
+*                      (1 1): Shift Right with sign Extension	
+*       A[31:0]      - 32 Bit Input to be Shifted
+*
+*       B[4:0]       - 5 Bit Input to determine number of places to shift
+*                      if n bits, min B = log2(n)
+
+*Output: shift[31:0] - Shifted Input A
+
+.subckt shiftL32 ALUFN[1:0] A[31:0] B[4:0] SL[31:0]
+
+XL_16_0 B4#16 A[31:16]  A[15:0]  W[31:16]  mux2
+XL_16_1 B4#16 A[15:0]   0#16     W[15:0]   mux2
+XL_8_0  B3#24 W[31:8]   W[23:0]  X[31:8]   mux2
+XL_8_1  B3#8  W[7:0]    0#8      X[7:0]    mux2
+XL_4_0  B2#28 X[31:4]   X[27:0]  Y[31:4]   mux2
+XL_4_1  B2#4  X[3:0]    0#4      Y[3:0]    mux2
+XL_2_0  B1#30 Y[31:2]   Y[29:0]  Z[31:2]   mux2
+XL_2_1  B1#2  Y[1:0]    0#2      Z[1:0]    mux2
+XL_1_0  B0#31 Z[31:1]   Z[30:0]  SL[31:1]  mux2
+XL_1_1  B0#1  Z0        0        SL0       mux2
+
+.ends
+
+
+.subckt shiftR32 ALUFN[1:0] A[31:0] B[4:0] SR[31:0]
+
+Xsignand A31 ALUFN1 sign and2
+
+XR_16_0 B4#16 A[15:0]    A[31:16]  W[15:0]   mux2
+XR_16_1 B4#16 A[31:16]   sign#16   W[31:16]  mux2
+XR_8_0  B3#24 W[23:0]    W[31:8]   X[23:0]   mux2
+XR_8_1  B3#8  W[31:24]   sign#8    X[31:24]  mux2
+XR_4_0  B2#28 X[27:0]    X[31:4]   Y[27:0]    mux2
+XR_4_1  B2#4  X[31:28]   sign#4    Y[31:28]  mux2
+XR_2_0  B1#30 Y[29:0]    Y[31:2]   Z[29:0]    mux2
+XR_2_1  B1#2  Y[31:30]   sign#2    Z[31:30]  mux2
+XR_1_0  B0#31 Z[30:0]    Z[31:1]   SR[30:0]  mux2
+XR_1_1  B0#1  Z31        sign        SR31       mux2
+
+.ends
+
+* Combined LEFT SHIFT, RIGHT SHIFT and RIGHT SHIFT (SIGNED)
+
+.subckt shift32 ALUFN[1:0] A[31:0] B[4:0] shift[31:0]
+
+XR32 ALUFN[1:0] A[31:0] B[4:0] SR[31:0] shiftR32
+XL32 ALUFN[1:0] A[31:0] B[4:0] SL[31:0] shiftL32
+Xmux4sel ALUFN0#32 ALUFN1#32 SL[31:0] SR[31:0] 0#32 SR[31:0] shift[31:0] mux4
+
+.ends
+
+****************************************************************
+* ALU - Working
+****************************************************************
+* A Combination of Adder, Comparator, Boolean and Shifter
+
+*Inputs: ALUFN[5:0] - Control Functions
+
+*        OPERATION///ALUFN      0   1   2   3   4   5
+*            ADD                0   0   0   0   0   0
+*            SUB                0   0   0   0   0   1  
+*            AND                0   1   1   0   0   0
+*             OR                0   1   1   1   1   0  
+*            XOR                0   1   0   1   1   0
+*        "A" LDR                0   1   1   0   1   0  
+*            SHL                1   0   0   0   0   0  
+*            SHR                1   0   0   0   0   1
+*            SRA                1   0   0   0   1   1  
+*          CMPEQ                1   1   0   0   1   1
+*          CMPLT                1   1   0   1   0   1  
+*          CMPLE                1   1   0   1   1   1
+
+*         A[31:0] - 32 Bit A Input (SIGNED)
+*         B[31:0] - 32 Bit B Input (SIGNED)
+
+*Outputs: ALU[31:0] - 32 Bit Output
+*         z         - True when s outputs are 0
+*         v         - True when operation overflows
+*         n         - True when s31 output = 1 (Negative Output)
+
+.subckt alu ALUFN[5:0] A[31:0] B[31:0] alu[31:0] z v n
+
+Xadd   ALUFN[0]   A[31:0] B[31:0] sum[31:0] z v n adder32
+
+Xmult  A[31:0] B[31:0] P[31:0] multiply32
+
+Xresult ALUFN1#32 sum[31:0] P[31:0] s[31:0] mux2
+
+Xboole ALUFN[3:0] A[31:0] B[31:0] boole[31:0]   boole32
+
+Xshift ALUFN[1:0] A[31:0] B[4:0]  shift[31:0]   shift32
+
+Xcmp   ALUFN[2:1] z v n   cmp[31:0]             compare32
+
+
+XALU   ALUFN4#32 ALUFN5#32 s[31:0] boole[31:0] shift[31:0] cmp[31:0] alu[31:0] mux4
+
+.ends
+
+****************************************************************
+* Multiplier 
+****************************************************************
+* Multiplies 2 32 bit input
+
+* Inputs: A[31:0] - 32 Bit Input A
+*         B[31:0] - 32 Bit Input B
+
+* Output: P[31:0] - Product of A and B (Low-Order 32 Bits)
+
+.subckt multiply32 A[31:0] B[31:0] P[31:0]
+* Convention of the and gates and_{B}_{A}
+
+* Create Horizontal Rows of AND GATES
+
+Xand_0 A[0:31] B0#32 and_0_[0:31] and2
+Xand_1 A[0:30] B1#31 and_1_[0:30] and2
+Xand_2 A[0:29] B2#30 and_2_[0:29] and2
+Xand_3 A[0:28] B3#29 and_3_[0:28] and2
+Xand_4 A[0:27] B4#28 and_4_[0:27] and2
+Xand_5 A[0:26] B5#27 and_5_[0:26] and2
+Xand_6 A[0:25] B6#26 and_6_[0:25] and2
+Xand_7 A[0:24] B7#25 and_7_[0:24] and2
+Xand_8 A[0:23] B8#24 and_8_[0:23] and2
+Xand_9 A[0:22] B9#23 and_9_[0:22] and2
+Xand_10 A[0:21] B10#22 and_10_[0:21] and2
+Xand_11 A[0:20] B11#21 and_11_[0:20] and2
+Xand_12 A[0:19] B12#20 and_12_[0:19] and2
+Xand_13 A[0:18] B13#19 and_13_[0:18] and2
+Xand_14 A[0:17] B14#18 and_14_[0:17] and2
+Xand_15 A[0:16] B15#17 and_15_[0:16] and2
+Xand_16 A[0:15] B16#16 and_16_[0:15] and2
+Xand_17 A[0:14] B17#15 and_17_[0:14] and2
+Xand_18 A[0:13] B18#14 and_18_[0:13] and2
+Xand_19 A[0:12] B19#13 and_19_[0:12] and2
+Xand_20 A[0:11] B20#12 and_20_[0:11] and2
+Xand_21 A[0:10] B21#11 and_21_[0:10] and2
+Xand_22 A[0:9] B22#10 and_22_[0:9] and2
+Xand_23 A[0:8] B23#9 and_23_[0:8] and2
+Xand_24 A[0:7] B24#8 and_24_[0:7] and2
+Xand_25 A[0:6] B25#7 and_25_[0:6] and2
+Xand_26 A[0:5] B26#6 and_26_[0:5] and2
+Xand_27 A[0:4] B27#5 and_27_[0:4] and2
+Xand_28 A[0:3] B28#4 and_28_[0:3] and2
+Xand_29 A[0:2] B29#3 and_29_[0:2] and2
+Xand_30 A[0:1] B30#2 and_30_[0:1] and2
+Xand_31 A[0:0] B31#1 and_31_[0:0] and2
+
+* Output P0
+XP0 and_0_0 P0 buffer
+*XFA_{Layer}_{Number}
+XFA_1_0 and_0_1 and_1_0 0 P1 c_1_0 FA
+XFA_1_  and_0_[2:31] and_1_[1:30] c_1_[0:29] s_1_[1:30] c_1_[1:30] FA
+XFA_2_0 s_1_1 and_2_0 0 P2 c_2_0 FA
+XFA_2_  s_1_[2:30] and_2_[1:29] c_2_[0:28] s_2_[1:29] c_2_[1:29] FA
+XFA_3_0 s_2_1 and_3_0 0 P3 c_3_0 FA
+XFA_3_  s_2_[2:29] and_3_[1:28] c_3_[0:27] s_3_[1:28] c_3_[1:28] FA
+XFA_4_0 s_3_1 and_4_0 0 P4 c_4_0 FA
+XFA_4_  s_3_[2:28] and_4_[1:27] c_4_[0:26] s_4_[1:27] c_4_[1:27] FA
+XFA_5_0 s_4_1 and_5_0 0 P5 c_5_0 FA
+XFA_5_  s_4_[2:27] and_5_[1:26] c_5_[0:25] s_5_[1:26] c_5_[1:26] FA
+XFA_6_0 s_5_1 and_6_0 0 P6 c_6_0 FA
+XFA_6_  s_5_[2:26] and_6_[1:25] c_6_[0:24] s_6_[1:25] c_6_[1:25] FA
+XFA_7_0 s_6_1 and_7_0 0 P7 c_7_0 FA
+XFA_7_  s_6_[2:25] and_7_[1:24] c_7_[0:23] s_7_[1:24] c_7_[1:24] FA
+XFA_8_0 s_7_1 and_8_0 0 P8 c_8_0 FA
+XFA_8_  s_7_[2:24] and_8_[1:23] c_8_[0:22] s_8_[1:23] c_8_[1:23] FA
+XFA_9_0 s_8_1 and_9_0 0 P9 c_9_0 FA
+XFA_9_  s_8_[2:23] and_9_[1:22] c_9_[0:21] s_9_[1:22] c_9_[1:22] FA
+XFA_10_0 s_9_1 and_10_0 0 P10 c_10_0 FA
+XFA_10_  s_9_[2:22] and_10_[1:21] c_10_[0:20] s_10_[1:21] c_10_[1:21] FA
+XFA_11_0 s_10_1 and_11_0 0 P11 c_11_0 FA
+XFA_11_  s_10_[2:21] and_11_[1:20] c_11_[0:19] s_11_[1:20] c_11_[1:20] FA
+XFA_12_0 s_11_1 and_12_0 0 P12 c_12_0 FA
+XFA_12_  s_11_[2:20] and_12_[1:19] c_12_[0:18] s_12_[1:19] c_12_[1:19] FA
+XFA_13_0 s_12_1 and_13_0 0 P13 c_13_0 FA
+XFA_13_  s_12_[2:19] and_13_[1:18] c_13_[0:17] s_13_[1:18] c_13_[1:18] FA
+XFA_14_0 s_13_1 and_14_0 0 P14 c_14_0 FA
+XFA_14_  s_13_[2:18] and_14_[1:17] c_14_[0:16] s_14_[1:17] c_14_[1:17] FA
+XFA_15_0 s_14_1 and_15_0 0 P15 c_15_0 FA
+XFA_15_  s_14_[2:17] and_15_[1:16] c_15_[0:15] s_15_[1:16] c_15_[1:16] FA
+XFA_16_0 s_15_1 and_16_0 0 P16 c_16_0 FA
+XFA_16_  s_15_[2:16] and_16_[1:15] c_16_[0:14] s_16_[1:15] c_16_[1:15] FA
+XFA_17_0 s_16_1 and_17_0 0 P17 c_17_0 FA
+XFA_17_  s_16_[2:15] and_17_[1:14] c_17_[0:13] s_17_[1:14] c_17_[1:14] FA
+XFA_18_0 s_17_1 and_18_0 0 P18 c_18_0 FA
+XFA_18_  s_17_[2:14] and_18_[1:13] c_18_[0:12] s_18_[1:13] c_18_[1:13] FA
+XFA_19_0 s_18_1 and_19_0 0 P19 c_19_0 FA
+XFA_19_  s_18_[2:13] and_19_[1:12] c_19_[0:11] s_19_[1:12] c_19_[1:12] FA
+XFA_20_0 s_19_1 and_20_0 0 P20 c_20_0 FA
+XFA_20_  s_19_[2:12] and_20_[1:11] c_20_[0:10] s_20_[1:11] c_20_[1:11] FA
+XFA_21_0 s_20_1 and_21_0 0 P21 c_21_0 FA
+XFA_21_  s_20_[2:11] and_21_[1:10] c_21_[0:9] s_21_[1:10] c_21_[1:10] FA
+XFA_22_0 s_21_1 and_22_0 0 P22 c_22_0 FA
+XFA_22_  s_21_[2:10] and_22_[1:9] c_22_[0:8] s_22_[1:9] c_22_[1:9] FA
+XFA_23_0 s_22_1 and_23_0 0 P23 c_23_0 FA
+XFA_23_  s_22_[2:9] and_23_[1:8] c_23_[0:7] s_23_[1:8] c_23_[1:8] FA
+XFA_24_0 s_23_1 and_24_0 0 P24 c_24_0 FA
+XFA_24_  s_23_[2:8] and_24_[1:7] c_24_[0:6] s_24_[1:7] c_24_[1:7] FA
+XFA_25_0 s_24_1 and_25_0 0 P25 c_25_0 FA
+XFA_25_  s_24_[2:7] and_25_[1:6] c_25_[0:5] s_25_[1:6] c_25_[1:6] FA
+XFA_26_0 s_25_1 and_26_0 0 P26 c_26_0 FA
+XFA_26_  s_25_[2:6] and_26_[1:5] c_26_[0:4] s_26_[1:5] c_26_[1:5] FA
+XFA_27_0 s_26_1 and_27_0 0 P27 c_27_0 FA
+XFA_27_  s_26_[2:5] and_27_[1:4] c_27_[0:3] s_27_[1:4] c_27_[1:4] FA
+XFA_28_0 s_27_1 and_28_0 0 P28 c_28_0 FA
+XFA_28_  s_27_[2:4] and_28_[1:3] c_28_[0:2] s_28_[1:3] c_28_[1:3] FA
+XFA_29_0 s_28_1 and_29_0 0 P29 c_29_0 FA
+XFA_29_  s_28_[2:3] and_29_[1:2] c_29_[0:1] s_29_[1:2] c_29_[1:2] FA
+XFA_30_0 s_29_1 and_30_0 0 P30 c_30_0 FA
+XFA_30_  s_29_2 and_30_1 c_30_0 s_30_1 c_30_[1:1] FA
+XFA_31_0 s_30_1 and_31_0 0 P31 c_31_0 FA
+
+.ends
+
+
