@@ -86,8 +86,14 @@ Xcon cmp[31:1] constant0
 ****************************************************************
 * Beta Logic - WORKING
 ****************************************************************
-* Beta Logic Allows all 16 2 input boolean functions by Implementing OR, AND, XOR
+* Beta Logic Allows all 16 2 input boolean functions by Implementing OR, AND, INV
 * The ALUFN Inputs encode the Truth Table of the specific options
+
+* Input: ALUFN[3:0] - Represents all outputs for a 2 input logic
+         A[31:0]    - Input A
+         B[31:0]    - Input B
+
+* Output: boole[31:0] - Output for comparing A and B
 
 .subckt boole32 ALUFN[3:0] A[31:0] B[31:0] boole[31:0]
 
