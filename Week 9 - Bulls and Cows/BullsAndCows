@@ -1,0 +1,120 @@
+.include beta.uasm
+.include lab5checkoff.uasm
+
+
+| Remember to push variables in reverse order
+
+count_bull_cows:
+PUSH(LP)
+PUSH(BP)	
+MOVE(SP,BP)
+
+PUSH(R1) | bulls, number of bulls
+PUSH(R2) | cows, number of cows
+
+| temp vars
+PUSH(R3) | i 
+PUSH(R4) | j
+PUSH(R5) | btemp
+PUSH(R6) | atry
+PUSH(R7) | btry
+PUSH(R8) | mask
+PUSH(R9) | a
+PUSH(R10) | b
+
+PUSH(R11) | for comparing op 1
+PUSH(R12) | for comparing op 2
+
+LD(BP,-12,r9) | load arg[0] (a) into r9 
+LD(BP,-16,r10) | load arg[1] (b) into r10
+
+CMOVE(0,R1)
+CMOVE(15, R8) 
+
+CMOVE(0,R3) | Initialize i
+BR(endbody1)
+
+body1:
+AND(R9,R8,R12)
+AND(R10,R8,R11)
+CMPEQ(R12,R11,R12)
+BEQ(R12,if1) | if r12 == 0, go to if1
+
+| else1
+
+ADDC(R1,1,R1)
+OR(R9,R8,R9)
+OR(R10,R8,R10)
+
+if1:
+SHLC(R8,4,R8)
+ADDC(R3,1,R3)
+
+endbody1:
+CMPLEC(R3,3,R11)
+BNE(R11,body1)
+
+CMOVE(0,R2)
+CMOVE(0,R3)
+BR(endbody2)
+
+body2:
+ANDC(R9,15,R6) | atry = a & 0xF
+SHRC(R9,4,R9)  | a >> 4
+CMPEQC(R6,15,R11)
+BNE(R11,if2)
+MOVE(R10,R5)
+CMOVE(15,R8)
+
+CMOVE(0,R4)
+BR(endfor3)
+
+body3:
+ANDC(R5,15,R7)
+SHRC(R5,4,R5)
+
+CMPEQ(R7,R6,R12)
+BEQ(R12,if3)
+ADDC(R2,1,R2)
+OR(R10,R8,R10)
+BR(if2)
+
+if3:
+SHLC(R8,4,R8)
+ADDC(R4,1,R4)
+
+endfor3:
+CMPLEC(R4,3,R11)
+BNE(R11,body3)
+
+if2:
+ADDC(R3,1,R3)
+
+endbody2:
+CMPLEC(R3,3,R11)
+BNE(R11,body2)
+
+SHLC(R1,4,R0)
+ADD(R0,R2,R0)
+
+POP(R12)
+POP(R11)
+POP(R10)
+POP(R9)
+POP(R8)
+POP(R7)
+POP(R6)
+POP(R5)
+POP(R4)
+POP(R3)
+POP(R2)
+POP(R1)
+
+MOVE(BP, SP)
+POP(BP)
+POP(LP)
+RTN()
+
+StackBase:
+LONG(.+4)
+. = .+0x100
